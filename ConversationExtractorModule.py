@@ -31,6 +31,9 @@ from org.sleuthkit.datamodel import ReadContentInputStream
 from org.sleuthkit.datamodel import BlackboardArtifact
 from org.sleuthkit.datamodel import BlackboardAttribute
 from org.sleuthkit.autopsy.datamodel import ContentUtils
+from util import Contact
+from util import Message
+from util import Conversation
 
 # import parsers
 import MmssmsParser
@@ -70,26 +73,26 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
 
 
     """convert messages of conversations from database into a transcript"""
-    def convertToTranscript(self, extractedConversations, db_name, report):
+    def convertToTranscript(self, extractedConversations, header, report):
         # Report header listing source
-        report.write("========================================================================\n" + db_name + "\n========================================================================")
+        report.write("========================================================================\n" + str(header) + "\n========================================================================")
         # Iterate through each conversation
-        for conversationData in extractedConversations:
+        for convObj in extractedConversations:
             try:
-                user1 = self.numberToName(conversationData[0])
-                user2 = self.numberToName(conversationData[1])  
-                messageList = conversationData[2]
+                person1 = convObj.person1.getFullName()  
+                person2 = convObj.person2.getFullName()                                            
+                messages = convObj.messages
 
                 # print transcript
-                txt = ("\n\n\n\n#----------------- CONVERSATION: %s to %s ------------------#" % (user1, user2))
+                txt = ("\n\n\n\n#----------------- CONVERSATION: %s to %s ------------------#" % (person1, person2))
                 report.write(txt)
                 previous_sender = None
-                for ele in messageList:
+                for msgObj in messages:
                     # expected tuple format: (sender, receiver, timestamp, message)
                     log = ""
-                    msg_sender = ele[0]
-                    msg_timestamp = ele[2]
-                    msg_content = ele[3]
+                    msg_sender = msgObj.sender.getNameOrIdentifier()  
+                    msg_timestamp = msgObj.timestamp
+                    msg_content = msgObj.content
                     # write new sender if needed
                     if msg_sender != previous_sender:  
                         log += ("\n\n" + self.numberToName(msg_sender) + "\t" + msg_timestamp) 
@@ -99,8 +102,8 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
                     report.write(log)
                     previous_sender = msg_sender
             except Exception as e:
-                errorMsg = ("Failed to transcribe conversation between %s and %s" % (user1, user2))
-                self.log(Level.INFO, "%s in %s\n\t %s" % (errorMsg, db_name, e))
+                errorMsg = ("Failed to transcribe conversation between %s and %s" % (person1, person2))
+                self.log(Level.INFO, "%s in %s\n\t %s" % (errorMsg, header, e))
     
 
 
@@ -112,7 +115,7 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
         self.log(Level.FINE, "\n\n---------------- Begin Conversation Extractor report ----------------")
         # Get case, datasource and filemanager, and logger
         currentCase = Case.getCurrentCase()
-        dataSources = currentCase.getDataSources()
+        dataSourceList = currentCase.getDataSources()
         fileManager = currentCase.getServices().getFileManager()
 
         # Create report file & log
@@ -125,20 +128,16 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
         progressBar.start()
 
         # Find target dbs in all available data sources & parse
-        for ds in dataSources:
-            dsName = ds.getName()
+        for dataSource in dataSourceList:
+            ds_name = dataSource.getName()
             for target_name in targets:
                 # Find specific target in datasource & save on disk
                 try:
-                    files = fileManager.findFiles(ds, target_name)  # returns list of AbstractFile objects
-
-                    self.log(Level.INFO, "Num objects %s" % len(files))
-
-                    file = files[0]
-                    unqiue_filename = str(hash(ds.getName())) + "-" + str(file.name) 
+                    file = fileManager.findFiles(dataSource, target_name)[0]  # return first AbstractFile objects
+                    unqiue_filename = str(hash(ds_name)) + "-" + str(file.name) 
                     stored_dbPath = os.path.join(currentCase.getTempDirectory(), unqiue_filename)
                     ContentUtils.writeToFile(file, io.File(stored_dbPath))        
-                    self.log(Level.FINE, "Found: %s in %s, storing at %s" % (target_name, dsName, stored_dbPath))
+                    self.log(Level.FINE, "Found: %s in %s, storing at %s" % (target_name, ds_name, stored_dbPath))
                 except Exception as e:
                     # log error and move to next target
                     self.log(Level.WARNING, "Error with finding and writing %s to disk\n\t %s" % (unqiue_filename, e))
@@ -147,9 +146,7 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
                 # Parse database using appropriate parser, all return same format
                 if target_name == "mmssms.db":
                     self.log(Level.INFO, ("Utilizing mmssmsParser for %s" % target_name))
-                    # extractedConversations = MmssmsParser.parse(stored_dbPath)
-                    # header = "Text Messages (mmssms.db)"
-                    msgParser = MmssmsParser.MmssmsParser(self, "Text Messages (mmssms.db)")
+                    msgParser = MmssmsParser.MmssmsParser(self, currentCase, dataSource)
                     extractedConversations = msgParser.parse(stored_dbPath)
                     header = msgParser.custom_header
                 else:
@@ -157,6 +154,10 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
                     self.log(Level.WARNING, "Could not find appropriate parser for %s, skipping" % unqiue_filename)
                     continue
                 
+                # self.log(Level.INFO, "# of convos: %s" % len(extractedConversations))
+                # for convo in extractedConversations:
+                #     self.log(Level.INFO, "\t> %s" % convo)
+
                 # Log conversations to report
                 if extractedConversations != None:
                     self.log(Level.FINE, "Found %s conversations for %s" % (len(extractedConversations), unqiue_filename))

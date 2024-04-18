@@ -6,44 +6,103 @@ April 14, 2024
 """
 
 
+import os
 from datetime import datetime
 from java import io
 from java.lang import System
 from java.lang import Class
 from java.util.logging import Level
 from java.sql import DriverManager
-
+from org.sleuthkit.autopsy.datamodel import ContentUtils
+from util import Contact
+from util import Message
+from util import Conversation
 
 
 
 class MmssmsParser():
-    parentModule = None 
-    custom_header = None
+    # global variables
+    custom_header = "Text Messages (mmssms.db)"         # custom header to display on conversation output
+    contact_dbName = "contacts2.db"                     # name of db where contacts can be found to conduct contact matching
+    contactTable = None                                 # contact table thatwill be used
+    
 
-    # initalizes parser object
-    def __init__(self, parentModule, custom_header = None):
+    def __init__(self, parentModule, assignedCase, dataSource):        
         self.parentModule = parentModule            # should be the ConversationExtractorModule object that called this function
-        self.custom_header = custom_header            # custom header to display on conversation output
+        self.assignedCase = assignedCase            # should be the case object this parser is running in
+        self.parentDataSource = dataSource          # should be the data source in which the file the parser is analyzing was found
         
-    # connect log with log of the parent module
+
+    """Connect log with log of the parent module"""
     def log(self, level, msg):
         self.parentModule.log(level, msg)
 
 
-    # TODO - function to identify contacts
-    def contactIdentifier(self):
-        pass
+    """ Generates a contact table to be used by the parser.  It scans the specified database 
+    file of the parser and extracts all id - number combinations it finds, then builds the table."""
+    def generateContactTable(self) -> bool:
+        fileManager = self.assignedCase.getServices().getFileManager()
+
+        # Find contact db in datasource and save it 
+        file = fileManager.findFiles(self.dataSource, self.contact_dbName)[0]  # returns list of AbstractFile objects
+        unqiue_filename = str(hash(self.dataSource.getName())) + "-" + str(file.name) 
+        stored_dbPath = os.path.join(self.assignedCase.getTempDirectory(), unqiue_filename)
+        ContentUtils.writeToFile(file, io.File(stored_dbPath))   
+        self.log(Level.FINE, "Found: %s for contact matching" % unqiue_filename) 
+    
+        # initalize db connection
+        Class.forName("org.sqlite.JDBC").newInstance()
+        conn = DriverManager.getConnection("jdbc:sqlite:%s"  % stored_dbPath)
+       
+        # find numbers in contacts             
+        statement = conn.createStatement()
+        resultSet = statement.executeQuery("""
+            SELECT DISTINCT number, name 
+                FROM contact""")        # TODO: what table & fields
+        
+        #-- Convert numbers to dictionary
+        if resultSet != None:
+            while resultSet.next():
+                name = resultSet.getString('name')
+                id = resultSet.getString('number')
+                self.contactTable[id] = name
+        # indicate table empty if no results were found
+        else:
+            self.contactTable == dict()
+
+
+    """ Attempts to match given id with the name of the contact in the contact table. Will first 
+    generate contact table if it doesnt exist.  If there is an error with generation of the name 
+    cant be found, returns None. """
+    def contactMatching(self, id):
+        # generate contact table if it doesnt exist
+        if self.contactTable == None:
+            try:
+                self.generateContactTable()
+            except Exception as e:
+                self.log(Level.WARNING, "Unable to generate contact table for %s\n\t%s" % (self.contact_dbName, e))
+                return None
+        
+        # try to match id with name
+        try:
+            return self.contactTable[id]
+        except:
+            self.log(Level.WARNING, "Error when trying to match %s to a name, from %s\n\t%s" % (id, self.contact_dbName, e))
+            return None
+
 
 
     """Parses text message database of Android phones, which should be located in mmssms.db.  Accepts path to file,
-    and returns a list of 'conversation tuples' which each has the format (participant1, participant2, message list).  
-    Each 'message' in the message list in turn is a tuple of the format (sender, receiver, timestamp, content). """
+    and returns a list of Conversation objects."""
     def parse(self, db_path):
-        extractedConversations = []  # should be a list of tuples with format: (sender, receiver, timestamp, message)
-
+        conversations = []
         self.log(Level.INFO, "Starting MmssmsParser --")
 
-        # initalize db connection
+        #-- Find number of device owner
+        # TODO:
+        deviceOwner = Contact(id="this_device")
+
+        #-- Initalize db connection
         try:
             Class.forName("org.sqlite.JDBC").newInstance()
             conn = DriverManager.getConnection("jdbc:sqlite:%s"  % db_path)
@@ -51,7 +110,8 @@ class MmssmsParser():
             self.log(Level.SEVERE, "Unable to establish connection to %s\n\t%s" %(db_path, e))
             return None
 
-        # find list of unique numbers in messages                  
+        #-- Find list of unique numbers in message, then for each message extract conversation between it and primary contacct 
+        # find unique numbers                
         try:
             statement = conn.createStatement()
             resultSet = statement.executeQuery("""
@@ -64,49 +124,51 @@ class MmssmsParser():
             self.log(Level.WARNING, "Unable to query numbers from %s\n\t%s" % (db_path, e))
             return None
         
-        # find conversations related to unique pairs of participants
+        # find conversations related to this number and the primary contact
         for number in numbersList:
-                foundMessages = []
-                # find all messages related to these two participants
-                try:
-                    query = """SELECT * 
-                        FROM sms 
-                        WHERE address = ?
-                        ORDER BY date"""                       # using 'date' instead of 'date_sent' since it seems more reliable, (although what if message didnt send)?
-                    statement = conn.prepareStatement(query)
-                    statement.setString(1, str(number))
-                    resultSet = statement.executeQuery()
-                except Exception as e:
-                    # log error and move to next iteration
-                    self.log(Level.INFO, "Unable to query messages between this device and %s from %s\n\t%s" % (number, db_path, e))
-                    continue
+            # create new contact & conversation for this number
+            newContact = Contact(id=number, name=self.contactMatching(number))   #TODO: contact identification
+            newConversation = Conversation(deviceOwner, newContact)
 
-                # parse throught found messages and extract useful data
-                try:
-                    while resultSet.next() != False:
-                        # identify recipients (type 1 indicates incoming message, type 2 indicates outgoig)
-                        if resultSet.getString('type') == str(1):
-                            sender = resultSet.getString('address')
-                            receiver = "this_device"    #TODO: identify address of this device
-                        else:
-                            receiver = resultSet.getString('address')
-                            sender = "this_device"      #TODO: identify address of this device
-                        # identify timestamp
-                        timestamp = int(resultSet.getString('date')) / 1000   # mmssms.db uses Unix epoch in milliseconds
-                        utc_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
-                        # get content
-                        content = resultSet.getString('body')
-                        foundMessages.append((sender, receiver, utc_time, content))
+            # find all messages related to these two participants
+            try:
+                query = """SELECT * 
+                    FROM sms 
+                    WHERE address = ?
+                    ORDER BY date"""                       # using 'date' instead of 'date_sent' since it seems more reliable, (although what if message didnt send)?
+                statement = conn.prepareStatement(query)
+                statement.setString(1, str(number))
+                resultSet = statement.executeQuery()
+            except Exception as e:
+                # log error and move to next iteration
+                self.log(Level.INFO, "Unable to query messages between this device and %s from %s\n\t%s" % (number, db_path, e))
+                continue
 
-                    # log data as a convo
-                    if foundMessages != []:
-                        extractedConversations.append((sender, receiver, foundMessages))
+            # parse throught found messages and extract useful data
+            try:
+                while resultSet.next() != False:
+                    # identify recipients (type 1 indicates incoming message, type 2 indicates outgoig)
+                    if resultSet.getString('type') == str(1):
+                        sender = newContact
+                        receiver = deviceOwner
+                    else:
+                        sender = deviceOwner 
+                        receiver = newContact
+                    # identify timestamp
+                    timestamp = int(resultSet.getString('date')) / 1000   # mmssms.db uses Unix epoch in milliseconds
+                    utc_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                    # get content
+                    content = resultSet.getString('body')
+                    newMessage = Message(sender, receiver, utc_time, content)
+                    newConversation.addMsg(newMessage)
+                # add conversation when loop is over
+                if newConversation.length() > 0:
+                    conversations.append(newConversation) 
+            except Exception as e:
+                self.log(Level.INFO, "Error with extracting message data from resultSet\n\t%s" % e)
 
-                except Exception as e:
-                    self.log(Level.INFO, "Error with extracting message data from resultSet\n\t%s" % e)
-
-        # return parser results
-        if extractedConversations != []:
-            return extractedConversations
+        #-- Return parser results
+        if conversations != []:
+            return conversations
         else:
             return None
