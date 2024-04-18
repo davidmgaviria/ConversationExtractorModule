@@ -90,12 +90,12 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
                 for msgObj in messages:
                     # expected tuple format: (sender, receiver, timestamp, message)
                     log = ""
-                    msg_sender = msgObj.sender.getNameOrIdentifier()  
-                    msg_timestamp = msgObj.timestamp
+                    msg_sender = msgObj.sender.getNameOrIdentifier()         
+                    msg_date_sent = msgObj.date_sent
                     msg_content = msgObj.content
                     # write new sender if needed
                     if msg_sender != previous_sender:  
-                        log += ("\n\n" + self.numberToName(msg_sender) + "\t" + msg_timestamp) 
+                        log += ("\n\n" + self.numberToName(msg_sender) + "\t" + msg_date_sent) 
                     # write message
                     cleaned_msg = msg_content.replace("\n\n", "")
                     log += ("\n > " + cleaned_msg)

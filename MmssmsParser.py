@@ -40,7 +40,7 @@ class MmssmsParser():
 
     """ Generates a contact table to be used by the parser.  It scans the specified database 
     file of the parser and extracts all id - number combinations it finds, then builds the table."""
-    def generateContactTable(self) -> bool:
+    def generateContactTable(self):# -> bool:
         fileManager = self.assignedCase.getServices().getFileManager()
 
         # Find contact db in datasource and save it 
@@ -127,7 +127,7 @@ class MmssmsParser():
         # find conversations related to this number and the primary contact
         for number in numbersList:
             # create new contact & conversation for this number
-            newContact = Contact(id=number, name=self.contactMatching(number))   #TODO: contact identification
+            newContact = Contact(id=number)  #, name=self.contactMatching(number))   #TODO: contact identification
             newConversation = Conversation(deviceOwner, newContact)
 
             # find all messages related to these two participants
