@@ -34,6 +34,7 @@ from org.sleuthkit.autopsy.datamodel import ContentUtils
 from util import Contact
 from util import Message
 from util import Conversation
+from fpdf.fpdf import FPDF
 
 # import parsers
 import MmssmsParser
