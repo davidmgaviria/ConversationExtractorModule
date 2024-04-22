@@ -62,6 +62,15 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
     def getDescription(self):
         return "Parses through the text messages database and identifies conversations by matching messages with the same two participants and ordering them by timestamp--each found conversation is printed as a transcript."
 
+    # TODO: Update this to reflect where the report file will be written to
+    def getRelativeFilePath(self):
+        return "testReport.txt"
+    
+    #TODO: contact matching
+    def numberToName(self, number):
+        # should try to find name and just return number otherwise
+        return str(number)
+
 
     """convert messages of conversations from database into a transcript"""
     def convertToTranscript(self, extractedConversations, header, report):
@@ -110,8 +119,7 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
         fileManager = currentCase.getServices().getFileManager()
 
         # Create report file & log
-        report_name = "testReport.txt"
-        fileName = os.path.join(reportSettings.getReportDirectoryPath(), report_name)
+        fileName = os.path.join(reportSettings.getReportDirectoryPath(),"testReport.txt")
         report = open(fileName, 'w')
         self.log(Level.FINE, "Created report %s" % fileName)
 
@@ -135,7 +143,7 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
                     self.log(Level.WARNING, "Error with finding and writing %s to disk\n\t %s" % (unqiue_filename, e))
                     continue
                     
-                # Parse database using appropriate parser, all return same format --- ADD PARSERS HERE
+                # Parse database using appropriate parser, all return same format
                 if target_name == "mmssms.db":
                     self.log(Level.INFO, ("Utilizing mmssmsParser for %s" % target_name))
                     msgParser = MmssmsParser.MmssmsParser(self, currentCase, dataSource)
@@ -146,6 +154,10 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
                     self.log(Level.WARNING, "Could not find appropriate parser for %s, skipping" % unqiue_filename)
                     continue
                 
+                # self.log(Level.INFO, "# of convos: %s" % len(extractedConversations))
+                # for convo in extractedConversations:
+                #     self.log(Level.INFO, "\t> %s" % convo)
+
                 # Log conversations to report
                 if extractedConversations != None:
                     self.log(Level.FINE, "Found %s conversations for %s" % (len(extractedConversations), unqiue_filename))
