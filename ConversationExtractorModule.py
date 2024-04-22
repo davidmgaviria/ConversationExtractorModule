@@ -63,48 +63,61 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
     def getDescription(self):
         return "Parses through the text messages database and identifies conversations by matching messages with the same two participants and ordering them by timestamp--each found conversation is printed as a transcript."
 
-    # TODO: Update this to reflect where the report file will be written to
+    # Where the report file will be written to
     def getRelativeFilePath(self):
         return "."
-    
-    #TODO: contact matching
-    def numberToName(self, number):
-        # should try to find name and just return number otherwise
-        return str(number)
 
 
     """convert messages of conversations from database into a transcript"""
-    def convertToTranscript(self, extractedConversations, header, report):
-        # Report header listing source
-        report.write("========================================================================\n" + str(header) + "\n========================================================================")
+    def convertToTranscript(self, extractedConversations, db_header, pdf):
+        # Datas source for following convos (header) 
+        pdf.set_font("Arial", "B", 14)
+        pdf.cell(0, 15, db_header, align='C', ln=1)
+
         # Iterate through each conversation
         for convObj in extractedConversations:
-            try:
-                person1 = convObj.person1.getFullName()  
-                person2 = convObj.person2.getFullName()                                            
+            try:                                   
+                # write convo header transcript
+                convo_header = ("Conversation: %s to %s" % (convObj.person1.getFullName(), convObj.person2.getFullName()))
+                pdf.set_font("Arial", "B", 12)
+                pdf.cell(0, 10, convo_header, ln=1)
+                
+                # write message transcript
                 messages = convObj.messages
-
-                # print transcript
-                txt = ("\n\n\n\n#----------------- CONVERSATION: %s to %s ------------------#" % (person1, person2))
-                report.write(txt)
                 previous_sender = None
                 for msgObj in messages:
-                    # expected tuple format: (sender, receiver, timestamp, message)
-                    log = ""
                     msg_sender = msgObj.sender.getNameOrIdentifier()         
-                    msg_date_sent = msgObj.date_sent
+                    # add new sender if needed
+                    if previous_sender != msg_sender:
+                        if msg_sender == convObj.person1.getNameOrIdentifier(): 
+                            pdf.set_text_color(r=0,b=100,g=0) # dark blue
+                        else:
+                            pdf.set_text_color(r=100,b=0,g=0) # dark red
+                        pdf.set_font("Arial", "BU", 10)
+                        pdf.cell(0, 5, msg_sender, ln=1)
+                    # # write content
                     msg_content = msgObj.content
-                    # write new sender if needed
-                    if msg_sender != previous_sender:  
-                        log += ("\n\n" + self.numberToName(msg_sender) + "\t" + msg_date_sent) 
-                    # write message
-                    cleaned_msg = msg_content.replace("\n\n", "")
-                    log += ("\n > " + cleaned_msg)
-                    report.write(log)
+                    if msg_sender == convObj.person1.getNameOrIdentifier(): 
+                        pdf.set_text_color(r=0,b=200,g=0) # light blue
+                    else:
+                        pdf.set_text_color(r=200,b=0,g=0) # light red
+                    pdf.set_font("Arial", '', 10)
+                    pdf.multi_cell(0, 5, msg_content)
+                    # # add date
+                    msg_date_sent = msgObj.date_sent
+                    pdf.set_text_color(100)  # grey
+                    pdf.set_font("Arial", "I", 10)
+                    pdf.cell(0, 5, msg_date_sent, ln=1)
+                    # add some space && update sender
+                    pdf.ln(5)
                     previous_sender = msg_sender
+                # House keeping
+                pdf.ln(5)
+                pdf.set_text_color(0,0,0)
+                    
             except Exception as e:
-                errorMsg = ("Failed to transcribe conversation between %s and %s" % (person1, person2))
-                self.log(Level.INFO, "%s in %s\n\t %s" % (errorMsg, header, e))
+                errorMsg = ("Failed to transcribe conversation between %s and %s" % (convObj.person1.getFullName(), convObj.person2.getFullName()))
+                self.log(Level.INFO, "%s in %s\n\t %s" % (errorMsg, db_header, e))
     
 
 
@@ -120,59 +133,59 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
         fileManager = currentCase.getServices().getFileManager()
 
         # Create report file & log
-        report_name = "testPDF.pdf"
+        report_name = "Extracted Conversations Report.pdf"
         report_path = os.path.join(reportSettings.getReportDirectoryPath(), report_name)
         self.log(Level.FINE, "Created report %s" % report_name)
 
-        # test
-        pdf = FPDF()
+        # Add report title
+        pdf = FPDF()    # autopage breaking enabled by default at 2cm
         pdf.add_page()
-        pdf.set_font("Arial", "B", 16)
-        pdf.cell(40, 10, 'Hello World!')
-        pdf.output(name=report_path)
-
+        pdf.set_font("Arial", "B", 20)
+        pdf.cell(0, 30, "Extracted Conversations Report", align='C', ln=1)
+   
         # # Configure progress bar
         progressBar.setIndeterminate(True)
         progressBar.start()
 
-        # # Find target dbs in all available data sources & parse
-        # for dataSource in dataSourceList:
-        #     ds_name = dataSource.getName()
-        #     for target_name in targets:
-        #         # Find specific target in datasource & save on disk
-        #         try:
-        #             file = fileManager.findFiles(dataSource, target_name)[0]  # return first AbstractFile objects
-        #             unqiue_filename = str(hash(ds_name)) + "-" + str(file.name) 
-        #             stored_dbPath = os.path.join(currentCase.getTempDirectory(), unqiue_filename)
-        #             ContentUtils.writeToFile(file, io.File(stored_dbPath))        
-        #             self.log(Level.FINE, "Found: %s in %s, storing at %s" % (target_name, ds_name, stored_dbPath))
-        #         except Exception as e:
-        #             # log error and move to next target
-        #             self.log(Level.WARNING, "Error with finding and writing %s to disk\n\t %s" % (unqiue_filename, e))
-        #             continue
+        # Find target dbs in all available data sources & parse
+        for dataSource in dataSourceList:
+            ds_name = dataSource.getName()
+            for target_name in targets:
+                # Find specific target in datasource & save on disk
+                try:
+                    file = fileManager.findFiles(dataSource, target_name)[0]  # return first AbstractFile objects
+                    unqiue_filename = str(hash(ds_name)) + "-" + str(file.name) 
+                    stored_dbPath = os.path.join(currentCase.getTempDirectory(), unqiue_filename)
+                    ContentUtils.writeToFile(file, io.File(stored_dbPath))        
+                    self.log(Level.FINE, "Found: %s in %s, storing at %s" % (target_name, ds_name, stored_dbPath))
+                except Exception as e:
+                    # log error and move to next target
+                    self.log(Level.WARNING, "Error with finding and writing %s to disk\n\t %s" % (unqiue_filename, e))
+                    continue
                     
-        #         # Parse database using appropriate parser, all return same format
-        #         if target_name == "mmssms.db":
-        #             self.log(Level.INFO, ("Utilizing mmssmsParser for %s" % target_name))
-        #             msgParser = MmssmsParser.MmssmsParser(self, currentCase, dataSource)
-        #             extractedConversations = msgParser.parse(stored_dbPath)
-        #             header = msgParser.custom_header
-        #         else:
-        #             # log error and move to next target
-        #             self.log(Level.WARNING, "Could not find appropriate parser for %s, skipping" % unqiue_filename)
-        #             continue
+                # Parse database using appropriate parser, all return same format
+                if target_name == "mmssms.db":
+                    self.log(Level.INFO, ("Utilizing mmssmsParser for %s" % target_name))
+                    msgParser = MmssmsParser.MmssmsParser(self, currentCase, dataSource)
+                    extractedConversations = msgParser.parse(stored_dbPath)
+                    header = msgParser.custom_header
+                else:
+                    # log error and move to next target
+                    self.log(Level.WARNING, "Could not find appropriate parser for %s, skipping" % unqiue_filename)
+                    continue
                 
-        #         # self.log(Level.INFO, "# of convos: %s" % len(extractedConversations))
-        #         # for convo in extractedConversations:
-        #         #     self.log(Level.INFO, "\t> %s" % convo)
+                # self.log(Level.INFO, "# of convos: %s" % len(extractedConversations))
+                # for convo in extractedConversations:
+                #     self.log(Level.INFO, "\t> %s" % convo)
 
-        #         # Log conversations to report
-        #         if extractedConversations != None:
-        #             self.log(Level.FINE, "Found %s conversations for %s" % (len(extractedConversations), unqiue_filename))
-        #             self.convertToTranscript(extractedConversations, header, report)
+                # Log conversations to report
+                if extractedConversations != None:
+                    self.log(Level.FINE, "Found %s conversations for %s" % (len(extractedConversations), unqiue_filename))
+                    self.convertToTranscript(extractedConversations, header, pdf)
                     
 
         # Output report once all targets have been found and parsed
+        pdf.output(name=report_path)
         currentCase.addReport(report_path, self.moduleName, "Extracted Conversations")
         progressBar.complete(ReportStatus.COMPLETE)
 
