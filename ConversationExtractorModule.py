@@ -65,7 +65,7 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
 
     # TODO: Update this to reflect where the report file will be written to
     def getRelativeFilePath(self):
-        return "testReport.txt"
+        return "."
     
     #TODO: contact matching
     def numberToName(self, number):
@@ -120,54 +120,60 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
         fileManager = currentCase.getServices().getFileManager()
 
         # Create report file & log
-        fileName = os.path.join(reportSettings.getReportDirectoryPath(),"testReport.txt")
-        report = open(fileName, 'w')
-        self.log(Level.FINE, "Created report %s" % fileName)
+        report_name = "testPDF.pdf"
+        report_path = os.path.join(reportSettings.getReportDirectoryPath(), report_name)
+        self.log(Level.FINE, "Created report %s" % report_name)
 
-        # Configure progress bar
+        # test
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", "B", 16)
+        pdf.cell(40, 10, 'Hello World!')
+        pdf.output(name=report_path)
+
+        # # Configure progress bar
         progressBar.setIndeterminate(True)
         progressBar.start()
 
-        # Find target dbs in all available data sources & parse
-        for dataSource in dataSourceList:
-            ds_name = dataSource.getName()
-            for target_name in targets:
-                # Find specific target in datasource & save on disk
-                try:
-                    file = fileManager.findFiles(dataSource, target_name)[0]  # return first AbstractFile objects
-                    unqiue_filename = str(hash(ds_name)) + "-" + str(file.name) 
-                    stored_dbPath = os.path.join(currentCase.getTempDirectory(), unqiue_filename)
-                    ContentUtils.writeToFile(file, io.File(stored_dbPath))        
-                    self.log(Level.FINE, "Found: %s in %s, storing at %s" % (target_name, ds_name, stored_dbPath))
-                except Exception as e:
-                    # log error and move to next target
-                    self.log(Level.WARNING, "Error with finding and writing %s to disk\n\t %s" % (unqiue_filename, e))
-                    continue
+        # # Find target dbs in all available data sources & parse
+        # for dataSource in dataSourceList:
+        #     ds_name = dataSource.getName()
+        #     for target_name in targets:
+        #         # Find specific target in datasource & save on disk
+        #         try:
+        #             file = fileManager.findFiles(dataSource, target_name)[0]  # return first AbstractFile objects
+        #             unqiue_filename = str(hash(ds_name)) + "-" + str(file.name) 
+        #             stored_dbPath = os.path.join(currentCase.getTempDirectory(), unqiue_filename)
+        #             ContentUtils.writeToFile(file, io.File(stored_dbPath))        
+        #             self.log(Level.FINE, "Found: %s in %s, storing at %s" % (target_name, ds_name, stored_dbPath))
+        #         except Exception as e:
+        #             # log error and move to next target
+        #             self.log(Level.WARNING, "Error with finding and writing %s to disk\n\t %s" % (unqiue_filename, e))
+        #             continue
                     
-                # Parse database using appropriate parser, all return same format
-                if target_name == "mmssms.db":
-                    self.log(Level.INFO, ("Utilizing mmssmsParser for %s" % target_name))
-                    msgParser = MmssmsParser.MmssmsParser(self, currentCase, dataSource)
-                    extractedConversations = msgParser.parse(stored_dbPath)
-                    header = msgParser.custom_header
-                else:
-                    # log error and move to next target
-                    self.log(Level.WARNING, "Could not find appropriate parser for %s, skipping" % unqiue_filename)
-                    continue
+        #         # Parse database using appropriate parser, all return same format
+        #         if target_name == "mmssms.db":
+        #             self.log(Level.INFO, ("Utilizing mmssmsParser for %s" % target_name))
+        #             msgParser = MmssmsParser.MmssmsParser(self, currentCase, dataSource)
+        #             extractedConversations = msgParser.parse(stored_dbPath)
+        #             header = msgParser.custom_header
+        #         else:
+        #             # log error and move to next target
+        #             self.log(Level.WARNING, "Could not find appropriate parser for %s, skipping" % unqiue_filename)
+        #             continue
                 
-                # self.log(Level.INFO, "# of convos: %s" % len(extractedConversations))
-                # for convo in extractedConversations:
-                #     self.log(Level.INFO, "\t> %s" % convo)
+        #         # self.log(Level.INFO, "# of convos: %s" % len(extractedConversations))
+        #         # for convo in extractedConversations:
+        #         #     self.log(Level.INFO, "\t> %s" % convo)
 
-                # Log conversations to report
-                if extractedConversations != None:
-                    self.log(Level.FINE, "Found %s conversations for %s" % (len(extractedConversations), unqiue_filename))
-                    self.convertToTranscript(extractedConversations, header, report)
+        #         # Log conversations to report
+        #         if extractedConversations != None:
+        #             self.log(Level.FINE, "Found %s conversations for %s" % (len(extractedConversations), unqiue_filename))
+        #             self.convertToTranscript(extractedConversations, header, report)
                     
 
         # Output report once all targets have been found and parsed
-        report.close()
-        currentCase.addReport(fileName, self.moduleName, "Extracted Conversations")
+        currentCase.addReport(report_path, self.moduleName, "Extracted Conversations")
         progressBar.complete(ReportStatus.COMPLETE)
 
 
