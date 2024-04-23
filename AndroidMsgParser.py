@@ -38,68 +38,13 @@ class MmssmsParser():
         self.parentModule.log(level, msg)
 
 
-    """ Generates a contact table to be used by the parser.  It scans the specified database 
-    file of the parser and extracts all id - number combinations it finds, then builds the table."""
-    def generateContactTable(self):# -> bool:
-        fileManager = self.assignedCase.getServices().getFileManager()
-
-        # Find contact db in datasource and save it 
-        file = fileManager.findFiles(self.dataSource, self.contact_dbName)[0]  # returns list of AbstractFile objects
-        unqiue_filename = str(hash(self.dataSource.getName())) + "-" + str(file.name) 
-        stored_dbPath = os.path.join(self.assignedCase.getTempDirectory(), unqiue_filename)
-        ContentUtils.writeToFile(file, io.File(stored_dbPath))   
-        self.log(Level.FINE, "Found: %s for contact matching" % unqiue_filename) 
-    
-        # initalize db connection
-        Class.forName("org.sqlite.JDBC").newInstance()
-        conn = DriverManager.getConnection("jdbc:sqlite:%s"  % stored_dbPath)
-       
-        # find numbers in contacts             
-        statement = conn.createStatement()
-        resultSet = statement.executeQuery("""
-            SELECT DISTINCT number, name 
-                FROM contact""")        # TODO: what table & fields
-        
-        #-- Convert numbers to dictionary
-        if resultSet != None:
-            while resultSet.next():
-                name = resultSet.getString('name')
-                id = resultSet.getString('number')
-                self.contactTable[id] = name
-        # indicate table empty if no results were found
-        else:
-            self.contactTable == dict()
-
-
-    """ Attempts to match given id with the name of the contact in the contact table. Will first 
-    generate contact table if it doesnt exist.  If there is an error with generation of the name 
-    cant be found, returns None. """
-    def contactMatching(self, id):
-        # generate contact table if it doesnt exist
-        if self.contactTable == None:
-            try:
-                self.generateContactTable()
-            except Exception as e:
-                self.log(Level.WARNING, "Unable to generate contact table for %s\n\t%s" % (self.contact_dbName, e))
-                return None
-        
-        # try to match id with name
-        try:
-            return self.contactTable[id]
-        except:
-            self.log(Level.WARNING, "Error when trying to match %s to a name, from %s\n\t%s" % (id, self.contact_dbName, e))
-            return None
-
-
-
     """Parses text message database of Android phones, which should be located in mmssms.db.  Accepts path to file,
     and returns a list of Conversation objects."""
     def parse(self, db_path):
         conversations = []
         self.log(Level.INFO, "Starting MmssmsParser --")
 
-        #-- Find number of device owner
-        # TODO:
+        #-- TODO: Find number of device owner
         deviceOwner = Contact(id="this_device")
 
         #-- Initalize db connection
@@ -172,3 +117,57 @@ class MmssmsParser():
             return conversations
         else:
             return None
+        
+
+        
+    # """ Generates a contact table to be used by the parser.  It scans the specified database 
+    # file of the parser and extracts all id - number combinations it finds, then builds the table."""
+    # def generateContactTable(self):# -> bool:
+    #     fileManager = self.assignedCase.getServices().getFileManager()
+
+    #     # Find contact db in datasource and save it 
+    #     file = fileManager.findFiles(self.dataSource, self.contact_dbName)[0]  # returns list of AbstractFile objects
+    #     unqiue_filename = str(hash(self.dataSource.getName())) + "-" + str(file.name) 
+    #     stored_dbPath = os.path.join(self.assignedCase.getTempDirectory(), unqiue_filename)
+    #     ContentUtils.writeToFile(file, io.File(stored_dbPath))   
+    #     self.log(Level.FINE, "Found: %s for contact matching" % unqiue_filename) 
+    
+    #     # initalize db connection
+    #     Class.forName("org.sqlite.JDBC").newInstance()
+    #     conn = DriverManager.getConnection("jdbc:sqlite:%s"  % stored_dbPath)
+       
+    #     # find numbers in contacts             
+    #     statement = conn.createStatement()
+    #     resultSet = statement.executeQuery("""
+    #         SELECT DISTINCT number, name 
+    #             FROM contact""")        # TODO: what table & fields
+        
+    #     #-- Convert numbers to dictionary
+    #     if resultSet != None:
+    #         while resultSet.next():
+    #             name = resultSet.getString('name')
+    #             id = resultSet.getString('number')
+    #             self.contactTable[id] = name
+    #     # indicate table empty if no results were found
+    #     else:
+    #         self.contactTable == dict()
+
+
+    # """ Attempts to match given id with the name of the contact in the contact table. Will first 
+    # generate contact table if it doesnt exist.  If there is an error with generation of the name 
+    # cant be found, returns None. """
+    # def contactMatching(self, id):
+    #     # generate contact table if it doesnt exist
+    #     if self.contactTable == None:
+    #         try:
+    #             self.generateContactTable()
+    #         except Exception as e:
+    #             self.log(Level.WARNING, "Unable to generate contact table for %s\n\t%s" % (self.contact_dbName, e))
+    #             return None
+        
+    #     # try to match id with name
+    #     try:
+    #         return self.contactTable[id]
+    #     except:
+    #         self.log(Level.WARNING, "Error when trying to match %s to a name, from %s\n\t%s" % (id, self.contact_dbName, e))
+    #         return None

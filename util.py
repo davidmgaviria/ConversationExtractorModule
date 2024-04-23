@@ -28,11 +28,7 @@ class Contact():
         else:
             return "'%s' (%s)" % (self.name, self.id)
         
-   
-        
-            
-            
-        
+
 
 class Message():
     def __init__(self, sender, receiver, date_sent, content):
@@ -42,7 +38,7 @@ class Message():
         self.content = content
 
     def __repr__(self):# -> str:
-        return "<Message [Sender: %s, Receiver: %s, Date Sent: %s]>" % (self.sender, self.receiver, self.date_sent)
+        return "<Message [Sender: %s, Receiver: %s, Date Sent: %s, Text: %s]>" % (self.sender, self.receiver, self.date_sent, self.content)
 
 
 
