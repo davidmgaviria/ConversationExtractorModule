@@ -23,10 +23,14 @@ class Contact():
 
     "Returns name and id of contact"
     def getFullName(self):# -> str:
-        if self.name == None:
+        if self.name is None:
+            return "'Unknown' (%s)" % (self.id)
+        else:
             return "'%s' (%s)" % (self.name, self.id)
-        else: 
-            return "'Unknown User' (%s)" % self.id
+        
+   
+        
+            
             
         
 
