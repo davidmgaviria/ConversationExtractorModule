@@ -92,7 +92,7 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
                 previous_sender = None
                 for msgObj in messages:
                     try:
-                        msg_sender = msgObj.sender.getNameOrIdentifier()         
+                        msg_sender = msgObj.sender.getNameOrIdentifier().encode('utf-8').decode('latin-1', errors='ignore')
                         # add new sender if needed
                         if previous_sender != msg_sender:
                             if msg_sender == convObj.person1.getNameOrIdentifier(): 
@@ -102,7 +102,7 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
                             pdf.set_font("Arial", "BU", 10)
                             pdf.cell(0, 5, msg_sender, ln=1)
                         # # write content
-                        msg_content = msgObj.content
+                        msg_content = msgObj.content.encode('utf-8').decode('latin-1', errors='ignore')
                         if msg_sender == convObj.person1.getNameOrIdentifier(): 
                             pdf.set_text_color(r=0,b=200,g=0) # light blue
                         else:
