@@ -31,17 +31,14 @@ from org.sleuthkit.datamodel import ReadContentInputStream
 from org.sleuthkit.datamodel import BlackboardArtifact
 from org.sleuthkit.datamodel import BlackboardAttribute
 from org.sleuthkit.autopsy.datamodel import ContentUtils
-
 from fpdf.fpdf import FPDF
 
 # import parsers
 import AndroidMsgParser
 import FacebookParser
-
 from util import Contact
 from util import Message
 from util import Conversation
-
 
 
 
@@ -136,7 +133,7 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
     #   See: http://sleuthkit.org/autopsy/docs/api-docs/latest/classorg_1_1sleuthkit_1_1autopsy_1_1report_1_1_report_progress_panel.html
     def generateReport(self, reportSettings, progressBar):
         # target databases to search for
-        targets = ["threads_db2", "mmssms.db"]
+        targets = ["mmssms.db", "threads_db2"]
 
         self.log(Level.INFO, "\n\n---------------- Begin Conversation Extractor report ----------------")
         # Get case, datasource and filemanager, and logger
@@ -152,7 +149,7 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
         # Add report title
         pdf = FPDF()    # autopage breaking enabled by default at 2cm
         pdf.add_page()
-        pdf.set_font("Arial", "B", 20)
+        pdf.set_font("Arial", "B", 24)
         pdf.cell(0, 30, "Extracted Conversations Report", align='C', ln=1)
    
         # # Configure progress bar
@@ -162,18 +159,24 @@ class ConversationExtractorModule(GeneralReportModuleAdapter):
         # Find target dbs in all available data sources & parse
         for dataSource in dataSourceList:
             ds_name = dataSource.getName()
-
+            pdf.set_font("Arial", "I", 18)
+            pdf.set_text_color(0,0,0)
+            pdf.cell(0, 10, ds_name, ln=1)
             for target_name in targets:
                 #-- Find specific target in datasource & save on disk
                 try:
-                    file = fileManager.findFiles(dataSource, target_name)[0]  # return first AbstractFile objects
-                    unqiue_filename = str(hash(ds_name)) + "-" + str(file.name)         #TOD - may have to append .db extension
-                    stored_dbPath = os.path.join(currentCase.getTempDirectory(), unqiue_filename)
-                    ContentUtils.writeToFile(file, io.File(stored_dbPath))        
-                    self.log(Level.INFO, "Found: %s in %s, storing at %s" % (target_name, ds_name, stored_dbPath))
+                    files = fileManager.findFiles(dataSource, target_name)           # return first AbstractFile objects
+                    if files == None:
+                        continue
+                    else:
+                        file = files[0]
+                        unqiue_filename = str(hash(ds_name)) + "-" + str(file.name)        
+                        stored_dbPath = os.path.join(currentCase.getTempDirectory(), unqiue_filename)
+                        ContentUtils.writeToFile(file, io.File(stored_dbPath))        
+                        self.log(Level.INFO, ("Found: %s in %s, storing at %s" % (target_name, ds_name, stored_dbPath)))
                 except Exception as e:
                     # log error and move to next target
-                    self.log(Level.WARNING, "Error with finding and writing %s to disk\n\t %s" % (unqiue_filename, e))
+                    self.log(Level.WARNING, "Error with finding and writing %s to disk\n\t%s" % (target_name, e))
                     continue
                     
                 #-- Choose parser to use for database --- ADD PARSERS HERE
